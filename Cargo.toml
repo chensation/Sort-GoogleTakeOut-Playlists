@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 id3 = "0.5.3"
 csv = "1.1.5"
+htmlescape = "0.3.1"
