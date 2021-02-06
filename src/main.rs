@@ -1,12 +1,12 @@
-use std::{env, fs, process, path, collections::HashMap, error::Error};
+use std::{env, fs, io, process, path, collections::HashMap, error::Error};
 use id3::Tag;
 use htmlescape;
 
-const TITLE : usize = 0;
-const PLAYORDER : usize = 7;
+const TITLE : usize = 0; //song title is the first column in the csv
+const PLAYORDER : usize = 7; //playorder is the 8th column in the csv
 
 struct Playlist {
-    tracks: HashMap<i32, Track>, //i32 for the pos of track in the playlist 
+    tracks: HashMap<usize, Track>, //i32 for the pos of track in the playlist 
     name: String
 }
 
@@ -111,7 +111,7 @@ fn store_playlist(playlist_path: &mut path::PathBuf, all_tracks: &mut Vec<Track>
         
         match stored_track_index { //move track to playlist if found, else err and skip
             Some(index) => {
-                playlist.tracks.insert(track_info[PLAYORDER].parse().unwrap(), all_tracks.remove(index)); //track_info[7] stores the pos of track, use remove to move our track from all_tracks into the playlist
+                playlist.tracks.insert(track_info[PLAYORDER].parse().unwrap(), all_tracks.remove(index)); //use remove to move our track from all_tracks into the playlist
              } 
             None => {
                 eprintln!("stored_playlist: There are no stored tracks corresponding to :\n {:?}", track_info);
@@ -131,11 +131,38 @@ fn store_playlist(playlist_path: &mut path::PathBuf, all_tracks: &mut Vec<Track>
     Ok(playlist)
 }
 
+fn create_playlist(playlist_path: &path::PathBuf, playlist: &Playlist) -> Result<bool, io::Error>{
+
+    match fs::create_dir(playlist_path) { //attempt to create the playlist directory
+
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => { //ignore if directory already exists
+            println!("{} already exists, copying into it", playlist_path.display());
+        }
+
+        Err(e) => return Err(e),
+
+        _=>()
+    }
+
+    for i in 0..playlist.tracks.len() { //loop through tracks by playorder
+
+        let track = &playlist.tracks[&i];
+        let track_filename = format!("{}_{}.mp3", i, track.name.as_str().replace("/", "_")); //create track file name as playorder_title.mp3
+
+        let track_path = playlist_path.join(track_filename);
+
+        if !track_path.exists() {
+            fs::copy(&track.path, track_path)?; //copy from the source path into the new path
+        }
+        
+    }
+    Ok(true)
+}
 fn main() {
     
-    let args : Vec<String> = env::args().collect();
+    let args : Vec<String> = env::args().collect(); //get command line arguments
 
-    let (input_dir, _output_dir) = read_config(&args).unwrap_or_else(|err| {
+    let (input_dir, output_dir) = read_config(&args).unwrap_or_else(|err| {
         eprintln!("Problem parsing arguments: {}", err);
         process::exit(1);
     });
@@ -143,12 +170,12 @@ fn main() {
     println!("Checking input directory...");
 
     let (is_takeout, playlists_path, tracks_path) = check_input_correct(&input_dir).unwrap_or_else(|err| {
-        eprintln!("Unable to check input directory: {}", err);
+        eprintln!("Unable to check input directory: {}", err); //check and return paths
         process::exit(1);
     });
 
 
-    if is_takeout {
+    if is_takeout { //if valid path
 
         println!("Valid directory! Storing tracks...");
 
@@ -170,7 +197,23 @@ fn main() {
 
         println!("playlists successfully sorted!");
 
-        
+        for playlist in all_playlists {
+
+
+            let playlist_path = path::PathBuf::from(output_dir).join(&playlist.name);
+
+            println!("Copying into {}", playlist_path.display());
+            
+            match create_playlist(&playlist_path, &playlist) {
+                Err(err) => {
+                    eprintln!("Unable to copy to playlist {}: {}", playlist_path.display(), err);
+                }
+                _ => ()
+            }
+        }
+
+        println!("Playlists created! Go check it out!");
+
     }
 
     else{
