@@ -179,13 +179,15 @@ fn main() {
 
         println!("Valid directory! Storing tracks...");
 
+        // store all tracks
         let mut all_tracks = store_tracks(&tracks_path).expect("can't store tracks");
 
         //println!("Here be tracks:\n {:?}", tracks);
 
         println!("Track successfully stored, sorting playlists...");
         let mut all_playlists : Vec<Playlist> = Vec::new();
-
+        
+        //look through every playlist and store their info
         for playlist in fs::read_dir(playlists_path).unwrap(){
             let playlist = playlist.unwrap();
 
@@ -197,8 +199,8 @@ fn main() {
 
         println!("playlists successfully sorted!");
 
+        //loop through playlists and create them in output dir
         for playlist in all_playlists {
-
 
             let playlist_path = path::PathBuf::from(output_dir).join(&playlist.name);
 
@@ -207,6 +209,32 @@ fn main() {
             match create_playlist(&playlist_path, &playlist) {
                 Err(err) => {
                     eprintln!("Unable to copy to playlist {}: {}", playlist_path.display(), err);
+                }
+                _ => ()
+            }
+        }
+
+        //create a misc playlist if there are still tracks remaining
+        if all_tracks.len() > 0 {
+            println!("There are still tracks unassociated with a playlist left, placing them into a Misc playlist.");
+
+            let mut misc_playlist = Playlist{
+                tracks: HashMap::new(),
+                name: "Misc".to_owned()
+            };
+
+            let mut index: usize = 0;
+            while all_tracks.len() > 0 {
+                misc_playlist.tracks.insert(index, all_tracks.pop().unwrap());
+                index += 1;
+
+            }
+
+            let misc_path = path::PathBuf::from(output_dir).join(&misc_playlist.name);
+
+            match create_playlist(&misc_path, &misc_playlist) {
+                Err(err) => {
+                    eprintln!("Unable to copy to playlist {}: {}", misc_path.display(), err);
                 }
                 _ => ()
             }
